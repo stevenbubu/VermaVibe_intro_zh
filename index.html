@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VermaVibe</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #000;
+      }
+      .stage {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer; /* 整個區域都可點 */
+        user-select: none;
+        background: #000;
+      }
+      /* 單一圖片，無任何淡入效果 */
+      .slide {
+        max-width: 100vw;
+        max-height: 100vh;
+        width: auto;
+        height: auto;
+        object-fit: contain; /* 完整呈現不裁切 */
+        background: #000;
+      }
+      .hint {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        color: #fff;
+        font: 14px/1.6 system-ui, "Microsoft JhengHei", sans-serif;
+        opacity: 0.8;
+        text-align: center;
+        transition: opacity 0.3s ease;
+      }
+      .hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* 尊重使用者減少動畫偏好（這裡只影響 hint） */
+      @media (prefers-reduced-motion: reduce) {
+        .hint {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <!-- ✅ 單一 img，透過 JS 直接更換 src -->
+      <img id="viewer" class="slide" src="" alt="slide" />
+    </div>
+
+    <div class="hint" id="hint">
+      點擊畫面➡下一張｜← → 鍵切換｜手機可左右滑動
+    </div>
+
+    <script>
+      // 👉 若檔名是 01.PNG、02.PNG... 用 padStart 生成
+      const count = 12;
+      const folder = "images/VermaVibe_20251217";
+
+      // 如果你的檔名是 1.PNG ~ 12.PNG，使用下方這段：
+      const images = Array.from(
+        { length: count },
+        (_, i) => `${folder}/${String(i + 1)}.PNG`
+      );
+
+      // 若你的檔名是 01.PNG ~ 12.PNG，改用這段：
+      // const images = Array.from({ length: count }, (_, i) => `${folder}/${String(i + 1).padStart(2, "0")}.PNG`);
+
+      let idx = 0;
+      const viewer = document.getElementById("viewer");
+      const stage = document.getElementById("stage");
+      const hint = document.getElementById("hint");
+
+      function show(i) {
+        idx = (i + images.length) % images.length;
+        const url = images[idx];
+
+        // 第一張顯示提示；第二張開始隱藏
+        if (idx === 0) hint.classList.remove("hidden");
+        else hint.classList.add("hidden");
+
+        // 直接切換圖片（無淡入）
+        viewer.src = url;
+        viewer.alt = `slide ${idx + 1}`;
+
+        // 增加載入失敗的回退（避免壞連結卡住）
+        viewer.onerror = () => {
+          console.warn("載入失敗：", url);
+          hint.textContent = `載入失敗：${url}（點擊可跳下一張）`;
+          hint.classList.remove("hidden");
+        };
+
+        // 預載下一張，提升切換順暢度
+        const pre = new Image();
+        pre.src = images[(idx + 1) % images.length];
+      }
+
+      // 點擊下一張（整個舞台可點）
+      stage.addEventListener("click", () => show(idx + 1));
+
+      // 鍵盤：← 前一張；→ 下一張；Home 第一張；End 最後一張；空白鍵下一張
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          show(idx - 1);
+        }
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          show(idx + 1);
+        }
+        if (e.key === "Home") {
+          e.preventDefault();
+          show(0);
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          show(images.length - 1);
+        }
+        if (e.key === " ") {
+          e.preventDefault();
+          show(idx + 1);
+        }
+      });
+
+      // 手機滑動：右滑上一張、左滑下一張
+      let startX = null;
+      stage.addEventListener("touchstart", (e) => {
+        startX = e.touches[0].clientX;
+      });
+      stage.addEventListener("touchend", (e) => {
+        if (startX === null) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        if (dx > 50) show(idx - 1);
+        if (dx < -50) show(idx + 1);
+        startX = null;
+      });
+
+      // 初始化（顯示第一張；提示可見）
+      show(0);
+    </script>
+  </body>
+</html>
