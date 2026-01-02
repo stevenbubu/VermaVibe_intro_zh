@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VermaVibe</title>
+    <title>Ver 0.0.33</title>
     <style>
       html,
       body {
@@ -16,6 +16,8 @@
         inset: 0;
         cursor: pointer;
         background: transparent; /* 透明，但接管所有事件 */
+        /* 允許垂直捲動；仍可點擊左右半邊 */
+        touch-action: pan-y;
       }
       .stage {
         position: fixed;
@@ -23,7 +25,6 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer; /* 整個區域都可點 */
         user-select: none;
         background: #000;
       }
@@ -67,15 +68,9 @@
       <div class="overlay" aria-hidden="true"></div>
     </div>
 
-    <div class="hint" id="hint">
-      點擊畫面➡下一張｜← → 鍵切換｜手機可左右滑動
-    </div>
+    <div class="hint" id="hint">← → 鍵切換｜手機可滑動或左右輕點</div>
 
     <script>
-      const overlay = document.querySelector(".overlay");
-      overlay.addEventListener("contextmenu", (e) => e.preventDefault());
-      overlay.addEventListener("click", () => show(idx + 1));
-
       // 👉 若檔名是 01.PNG、02.PNG... 用 padStart 生成
       const count = 12;
       const folder = "images/VermaVibe_20251217";
@@ -86,13 +81,11 @@
         (_, i) => `${folder}/${String(i + 1)}.PNG`
       );
 
-      // 若你的檔名是 01.PNG ~ 12.PNG，改用這段：
-      // const images = Array.from({ length: count }, (_, i) => `${folder}/${String(i + 1).padStart(2, "0")}.PNG`);
-
       let idx = 0;
       const viewer = document.getElementById("viewer");
       const stage = document.getElementById("stage");
       const hint = document.getElementById("hint");
+      const overlay = document.querySelector(".overlay");
 
       function show(i) {
         idx = (i + images.length) % images.length;
@@ -118,8 +111,51 @@
         pre.src = images[(idx + 1) % images.length];
       }
 
-      // 點擊下一張（整個舞台可點）
-      stage.addEventListener("click", () => show(idx + 1));
+      // 👉 共用的「依點擊位置」判斷函式（左右半邊）
+      function handlePositionalClick(clientX) {
+        const { left, width } = stage.getBoundingClientRect();
+        const x = clientX - left;
+        const half = width / 2;
+        if (x < half) {
+          show(idx - 1); // 左半邊：上一張
+        } else {
+          show(idx + 1); // 右半邊：下一張
+        }
+      }
+
+      // 取消右鍵選單
+      overlay.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      let pointerStartX = null;
+
+      overlay.addEventListener("pointerdown", (e) => {
+        // 只記座標，不阻塞捲動
+        pointerStartX = e.clientX;
+      });
+
+      overlay.addEventListener("pointerup", (e) => {
+        e.stopPropagation();
+        const endX = e.clientX;
+
+        if (pointerStartX != null) {
+          const dx = endX - pointerStartX;
+
+          // 觸控或筆：用滑動閾值，否則用左右半邊
+          if (e.pointerType === "touch" || e.pointerType === "pen") {
+            if (Math.abs(dx) > 50) {
+              if (dx > 0) show(idx - 1);
+              else show(idx + 1);
+            } else {
+              handlePositionalClick(endX);
+            }
+          } else {
+            // 滑鼠：左右半邊
+            handlePositionalClick(endX);
+          }
+        }
+
+        pointerStartX = null;
+      });
 
       // 鍵盤：← 前一張；→ 下一張；Home 第一張；End 最後一張；空白鍵下一張
       document.addEventListener("keydown", (e) => {
@@ -143,19 +179,6 @@
           e.preventDefault();
           show(idx + 1);
         }
-      });
-
-      // 手機滑動：右滑上一張、左滑下一張
-      let startX = null;
-      stage.addEventListener("touchstart", (e) => {
-        startX = e.touches[0].clientX;
-      });
-      stage.addEventListener("touchend", (e) => {
-        if (startX === null) return;
-        const dx = e.changedTouches[0].clientX - startX;
-        if (dx > 50) show(idx - 1);
-        if (dx < -50) show(idx + 1);
-        startX = null;
       });
 
       // 初始化（顯示第一張；提示可見）
