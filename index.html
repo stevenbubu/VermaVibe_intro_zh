@@ -5,38 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VermaVibe</title>
     <style>
+      :root {
+        --header-height: 56px; /* 選單列高度（可依喜好調整） */
+        --header-bg: #111; /* 選單背景 */
+        --header-fg: #fff; /* 選單文字 */
+        --accent: #2dd4bf; /* 強調色（按鈕 hover） */
+      }
+
       html,
       body {
         height: 100%;
         margin: 0;
         background: #000;
       }
-      .overlay {
-        position: absolute;
-        inset: 0;
-        cursor: pointer;
-        background: transparent; /* 透明，但接管所有事件 */
-        /* 允許垂直捲動；仍可點擊左右半邊 */
-        touch-action: pan-y;
+
+      /* 置頂選單列 */
+      .header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--header-height);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: var(--header-bg);
+        color: var(--header-fg);
+        z-index: 1000; /* 高於 stage/overlay */
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        user-select: none;
       }
+
+      .brand {
+        font: 600 15px/1 system-ui, "Microsoft JhengHei", sans-serif;
+        letter-spacing: 0.2px;
+        margin-right: 8px;
+        opacity: 0.9;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .btn {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--header-fg);
+        padding: 8px 12px;
+        border-radius: 8px;
+        font: 14px/1 system-ui, "Microsoft JhengHei", sans-serif;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease,
+          transform 0.05s ease;
+        touch-action: manipulation;
+      }
+      .btn:hover {
+        background: rgba(45, 212, 191, 0.18);
+        border-color: var(--accent);
+      }
+      .btn:active {
+        transform: scale(0.98);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* 主舞台：為了不被 header 遮到，使用 padding-top 預留空間 */
       .stage {
         position: fixed;
         inset: 0;
+        padding-top: var(--header-height); /* ⭐ 預留選單列高度 */
         display: flex;
         align-items: center;
         justify-content: center;
         user-select: none;
         background: #000;
+        z-index: 10;
       }
+
       /* 單一圖片，無任何淡入效果 */
       .slide {
         max-width: 100vw;
-        max-height: 100vh;
+        max-height: calc(100vh - var(--header-height)); /* ⭐ 扣除選單列 */
         width: auto;
         height: auto;
         object-fit: contain; /* 完整呈現不裁切 */
         background: #000;
       }
+
+      .overlay {
+        position: absolute;
+        /* 避免覆蓋 header：從 header 下緣開始鋪 */
+        top: var(--header-height);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        cursor: pointer;
+        background: transparent; /* 透明，但接管所有事件 */
+        /* 允許垂直捲動；仍可點擊左右半邊 */
+        touch-action: pan-y;
+        z-index: 20; /* 低於 header，高於圖片 */
+      }
+
       .hint {
         position: fixed;
         left: 50%;
@@ -47,6 +120,7 @@
         opacity: 0.8;
         text-align: center;
         transition: opacity 0.3s ease;
+        z-index: 30; /* 在 overlay 之上 */
       }
       .hint.hidden {
         opacity: 0;
@@ -59,9 +133,43 @@
           transition: none !important;
         }
       }
+
+      /* 小尺寸優化：縮小選單高度與字級 */
+      @media (max-width: 480px) {
+        :root {
+          --header-height: 52px;
+        }
+        .btn {
+          padding: 8px 10px;
+          font-size: 13px;
+        }
+        .brand {
+          font-size: 14px;
+        }
+      }
     </style>
   </head>
   <body>
+    <!-- ⭐ 置頂選單列 -->
+    <header class="header" role="navigation" aria-label="主選單">
+      <div class="brand">VermaVibe</div>
+
+      <button class="btn" id="btn-first" title="到第一張 (Home)">第一張</button>
+      <button class="btn" id="btn-prev" title="上一張 (←)">上一張</button>
+      <button class="btn" id="btn-next" title="下一張 (→ / Space)">
+        下一張
+      </button>
+      <button class="btn" id="btn-last" title="到最後一張 (End)">
+        最後一張
+      </button>
+
+      <div class="spacer"></div>
+
+      <button class="btn" id="btn-toggle-hint" title="顯示/隱藏提示">
+        提示
+      </button>
+    </header>
+
     <div class="stage" id="stage">
       <!-- ✅ 單一 img，透過 JS 直接更換 src -->
       <img id="viewer" class="slide" src="" alt="slide" draggable="false" />
@@ -87,6 +195,13 @@
       const hint = document.getElementById("hint");
       const overlay = document.querySelector(".overlay");
 
+      // 選單按鈕
+      const btnFirst = document.getElementById("btn-first");
+      const btnPrev = document.getElementById("btn-prev");
+      const btnNext = document.getElementById("btn-next");
+      const btnLast = document.getElementById("btn-last");
+      const btnToggleHint = document.getElementById("btn-toggle-hint");
+
       function show(i) {
         idx = (i + images.length) % images.length;
         const url = images[idx];
@@ -109,6 +224,12 @@
         // 預載下一張，提升切換順暢度
         const pre = new Image();
         pre.src = images[(idx + 1) % images.length];
+
+        // 更新按鈕 disabled 狀態（可選）
+        btnFirst.disabled = idx === 0;
+        btnPrev.disabled = images.length <= 1;
+        btnNext.disabled = images.length <= 1;
+        btnLast.disabled = idx === images.length - 1;
       }
 
       // 👉 共用的「依點擊位置」判斷函式（左右半邊）
@@ -179,6 +300,16 @@
           e.preventDefault();
           show(idx + 1);
         }
+      });
+
+      // ⭐ 選單按鈕事件
+      btnFirst.addEventListener("click", () => show(0));
+      btnPrev.addEventListener("click", () => show(idx - 1));
+      btnNext.addEventListener("click", () => show(idx + 1));
+      btnLast.addEventListener("click", () => show(images.length - 1));
+
+      btnToggleHint.addEventListener("click", () => {
+        hint.classList.toggle("hidden");
       });
 
       // 初始化（顯示第一張；提示可見）
